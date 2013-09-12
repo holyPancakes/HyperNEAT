@@ -24,7 +24,7 @@
 # `--`\____       __..---~~ ~~--..~--------~~   |                  ,'       ,'
 #                                           "Catbus" (from "My Neighbor Totoro")
 
-import argparse, os, random, time, sys, util
+import argparse, os, random, time, sys
 
 # This runs a single Atari game.
 def run_game(executable, dataFile, generationFile, individualId, fitnessFile, seed, rom):
@@ -58,7 +58,11 @@ resultsDir               = args.r
 individualsPerGeneration = args.n
 
 # Detect the current generation
-currentGeneration = util.getCurrentGen(resultsDir)
+currentGeneration = -1
+for f in os.listdir(resultsDir):
+    if f.startswith('generation') and 'tmp' not in f:
+        genNumber = int(f[len('generation'):-len('.ser.gz')])
+        currentGeneration = max(currentGeneration, genNumber)
 if currentGeneration < 0:
         sys.stderr.write('Did not find any generation files! Exiting.\n')
         sys.stderr.flush()
@@ -72,8 +76,8 @@ while currentGeneration < maxGeneration:
     start = time.time()
     while not os.path.exists(generationPath):
         time.sleep(5)
-        if time.time() - start >= 600:
-            sys.stderr.write('Reached 10min timeout waiting for new generation... quitting\n')
+        if time.time() - start >= 300:
+            sys.stderr.write('Reached 5min timeout waiting for new generation... quitting\n')
             sys.stderr.flush()
             sys.exit(0)
 

@@ -111,6 +111,8 @@ namespace HCUBE
         genes.push_back(GeneticNodeGene("Y1","NetworkSensor",0,false));
         genes.push_back(GeneticNodeGene("X2","NetworkSensor",0,false));
         genes.push_back(GeneticNodeGene("Y2","NetworkSensor",0,false));
+        genes.push_back(GeneticNodeGene("DeltaX","NetworkSensor",0,false));
+        genes.push_back(GeneticNodeGene("DeltaY","NetworkSensor",0,false));
 
         // Output Nodes
         for (int i=0; i<numObjClasses; ++i) {

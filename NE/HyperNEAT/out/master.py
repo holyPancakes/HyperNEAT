@@ -29,6 +29,7 @@
 #                 ^~"~---~~~~~~`
 
 import argparse, os, subprocess, time, sys
+user="joel"
 
 # Submits a condor job which starts a worker running
 def startWorker(workerNum, executable, resultsDir, dataFile, numIndividuals, numGenerations, seed, rom):
@@ -63,7 +64,7 @@ def startWorker(workerNum, executable, resultsDir, dataFile, numIndividuals, num
     # Wait for this job to show up in the condor_q before returning
     for i in range(12):
         time.sleep(10)
-        out = subprocess.Popen(["condor_q","mhauskn"],stdout=subprocess.PIPE).communicate()[0]
+        out = subprocess.Popen(["condor_q",user],stdout=subprocess.PIPE).communicate()[0]
         if out.find('\n'+str(procID)) != -1:
             return procID
 
@@ -154,7 +155,7 @@ while currentGeneration < maxGeneration:
                 individualIds.remove(individualId)
 
         # Detect missing workers
-        out = subprocess.Popen(["condor_q","mhauskn"],stdout=subprocess.PIPE).communicate()[0]
+        out = subprocess.Popen(["condor_q",user],stdout=subprocess.PIPE).communicate()[0]
         for procID in list(procIDs):
             if out and out.find('Failed to fetch ads') == -1 and out.find('\n'+str(procID)) == -1:
                 print 'Missing pid:',procID
@@ -187,7 +188,7 @@ while currentGeneration < maxGeneration:
         # Stop the master if too many workers have died
         if deadWorkers >= deadWorkerLimit:
             readBody = subprocess.Popen(["echo", resultsDir], stdout=subprocess.PIPE)
-            subprocess.check_call(["mail", "-s", '[master.py - '+resultsDir+'] too many workers dead', 'mhauskn@cs.utexas.edu'], stdin=readBody.stdout, stdout=subprocess.PIPE)
+            subprocess.check_call(["mail", "-s", '[master.py - '+resultsDir+'] too many workers dead', 'joel@cs.utexas.edu'], stdin=readBody.stdout, stdout=subprocess.PIPE)
             print 'Over',deadWorkerLimit,'dead workers. When will the violence end?'
             sys.stdout.flush()
             sys.exit(0)

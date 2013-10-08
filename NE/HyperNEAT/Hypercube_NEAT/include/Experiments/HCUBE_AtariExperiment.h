@@ -68,7 +68,7 @@ namespace HCUBE
                               double mu_x, double mu_y,
                               double sigma_x, double sigma_y);
 
-
+	bool is_allowable(Action a);
         // Methods Inherited from HCUBE_Experiment
         void processIndividualPostHoc(shared_ptr<NEAT::GeneticIndividual> individual) {};
         void preprocessIndividual(shared_ptr<NEAT::GeneticGeneration> generation,

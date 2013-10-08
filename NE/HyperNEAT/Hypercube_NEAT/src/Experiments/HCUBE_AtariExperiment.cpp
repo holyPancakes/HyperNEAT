@@ -7,10 +7,96 @@
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 
+
+
+//#define SN_ACTION
+#define CON_ACTION
+
 using namespace NEAT;
 
 namespace HCUBE
 {
+
+struct pair_sort_pred {
+    bool operator()(const std::pair<float,int> &left, const std::pair<float,int> &right) {
+        return left.first < right.first;
+    }
+};
+
+	bool AtariExperiment::is_allowable(Action a) {
+         int numLegal = ale.legal_actions.size();
+	 for(int i=0;i<numLegal;i++)
+	  if (a==ale.legal_actions[i])
+	    return true;
+         return false;
+	}
+
+	Action map_to_action(int indx, bool firing) {
+          if(!firing) {
+            switch (indx) {
+              case 0:
+		return PLAYER_A_UPLEFT;
+		break;
+	      case 1:
+		return PLAYER_A_UP;
+		break;
+	      case 2:
+		return PLAYER_A_UPRIGHT;
+		break;
+	      case 3:
+		return PLAYER_A_LEFT;
+		break;
+	      case 4:
+		return PLAYER_A_NOOP;
+		break;
+	      case 5:
+		return PLAYER_A_RIGHT;
+		break;
+	      case 6:
+		return PLAYER_A_DOWNLEFT;
+		break;
+	      case 7:
+		return PLAYER_A_DOWN;
+		break;
+	      case 8:
+		return PLAYER_A_DOWNRIGHT;
+		break;
+	    }
+          }
+	  else {
+	    switch (indx) {
+              case 0:
+		return PLAYER_A_UPLEFTFIRE;
+		break;
+	      case 1:
+		return PLAYER_A_UPFIRE;
+		break;
+	      case 2:
+		return PLAYER_A_UPRIGHTFIRE;
+		break;
+	      case 3:
+		return PLAYER_A_LEFTFIRE;
+		break;
+	      case 4:
+		return PLAYER_A_FIRE;
+		break;
+	      case 5:
+		return PLAYER_A_RIGHTFIRE;
+		break;
+	      case 6:
+		return PLAYER_A_DOWNLEFTFIRE;
+		break;
+	      case 7:
+		return PLAYER_A_DOWNFIRE;
+		break;
+	      case 8:
+		return PLAYER_A_DOWNRIGHTFIRE;
+		break;
+	    }
+	  }
+	 return PLAYER_A_NOOP;
+	}
+
     AtariExperiment::AtariExperiment(string _experimentName,int _threadID):
         Experiment(_experimentName,_threadID), substrate_width(8), substrate_height(10), visProc(NULL),
         rom_file(""), numActions(0), numObjClasses(0), display_active(false), outputLayerIndx(-1)
@@ -37,6 +123,8 @@ namespace HCUBE
             cerr << "Ale had problem loading rom..." << endl;
             exit(-1);
         }
+
+        //JOEL TODO: use minimal actions instead of legal actions?
         numActions = ale.legal_actions.size();
 
         if (processScreen) {
@@ -73,17 +161,44 @@ namespace HCUBE
         layerInfo.layerLocations.push_back(Vector3<float>(4*numObjClasses,0,0));
         layerInfo.layerNames.push_back("InputSelf");
 
+        // One input layer for bias 
+        layerInfo.layerSizes.push_back(Vector2<int>(1,1));
+        layerInfo.layerIsInput.push_back(true);
+        layerInfo.layerLocations.push_back(Vector3<float>(4*numObjClasses+1,0,0));
+        layerInfo.layerNames.push_back("InputBias");
+
+
         // Processing level -- takes input from all the previous
         layerInfo.layerSizes.push_back(Vector2<int>(substrate_width,substrate_height));
         layerInfo.layerIsInput.push_back(false);
         layerInfo.layerLocations.push_back(Vector3<float>(0,4,0));
         layerInfo.layerNames.push_back("Processing");
-
+        
+	#ifdef SN_ACTION
+	//Output layer (single neuron) for each action
+        for (int i=0; i<numActions; ++i) {
+            layerInfo.layerSizes.push_back(Vector2<int>(1,1));
+            layerInfo.layerIsInput.push_back(false);
+            layerInfo.layerLocations.push_back(Vector3<float>(4*i,8,0));
+            layerInfo.layerNames.push_back("Output" + boost::lexical_cast<std::string>(i));
+        }
+	#elif defined(CON_ACTION)
+          layerInfo.layerSizes.push_back(Vector2<int>(3,3));
+          layerInfo.layerIsInput.push_back(false);
+          layerInfo.layerLocations.push_back(Vector3<float>(0,8,0));
+          layerInfo.layerNames.push_back("OutputDirection");
+          
+          layerInfo.layerSizes.push_back(Vector2<int>(1,1));
+          layerInfo.layerIsInput.push_back(false);
+          layerInfo.layerLocations.push_back(Vector3<float>(4,8,0));
+          layerInfo.layerNames.push_back("OutputFire");
+        #else
         // Output layer -- used for action selection
         layerInfo.layerSizes.push_back(Vector2<int>(numActions,1));
         layerInfo.layerIsInput.push_back(false);
         layerInfo.layerLocations.push_back(Vector3<float>(0,8,0));
         layerInfo.layerNames.push_back("Output");
+        #endif
 
         for (int i=0; i<numObjClasses; ++i) {
             layerInfo.layerAdjacencyList.push_back(std::pair<string,string>(
@@ -91,14 +206,26 @@ namespace HCUBE
                                                        "Processing"));
         }
         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("InputSelf","Processing"));
+
+        #ifdef SN_ACTION
+        for (int i=0; i<numObjClasses; ++i) {
+         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("Processing","Output"+boost::lexical_cast<std::string>(i)));
+	}
+        #elif defined(CON_ACTION)
+         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("InputBias","OutputDirection"));
+         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("Processing","OutputDirection"));
+         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("InputBias","OutputFire"));
+         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("Processing","OutputFire"));
+        #else
         layerInfo.layerAdjacencyList.push_back(std::pair<string,string>("Processing","Output"));
+        #endif
 
         layerInfo.normalize = true;
         layerInfo.useOldOutputNames = false;
         layerInfo.layerValidSizes = layerInfo.layerSizes;
 
         substrate.setLayerInfo(layerInfo);
-        outputLayerIndx = numObjClasses + 2;
+        outputLayerIndx = numObjClasses + 3; //2; withoutbias
     }
 
     NEAT::GeneticPopulation* AtariExperiment::createInitialPopulation(int populationSize) {
@@ -111,20 +238,47 @@ namespace HCUBE
         genes.push_back(GeneticNodeGene("Y1","NetworkSensor",0,false));
         genes.push_back(GeneticNodeGene("X2","NetworkSensor",0,false));
         genes.push_back(GeneticNodeGene("Y2","NetworkSensor",0,false));
-        genes.push_back(GeneticNodeGene("DeltaX","NetworkSensor",0,false));
-        genes.push_back(GeneticNodeGene("DeltaY","NetworkSensor",0,false));
+
+	//JOELNOTE: tehse are added, may or may not be helpful?
+        //genes.push_back(GeneticNodeGene("DeltaX","NetworkSensor",0,false));
+        //genes.push_back(GeneticNodeGene("DeltaY","NetworkSensor",0,false));
+        //genes.push_back(GeneticNodeGene("DeltaR","NetworkSensor",0,false));
 
         // Output Nodes
         for (int i=0; i<numObjClasses; ++i) {
-            genes.push_back(GeneticNodeGene("Output_Input" + boost::lexical_cast<std::string>(i) +
-                                            "_Processing",
+
+
+
+           genes.push_back(GeneticNodeGene("Output_Input" + boost::lexical_cast<std::string>(i) +
+                                           "_Processing",
                                             "NetworkOutputNode",1,false,
                                             ACTIVATION_FUNCTION_SIGMOID));
         }
+
         genes.push_back(GeneticNodeGene("Output_InputSelf_Processing","NetworkOutputNode",1,false,
                                         ACTIVATION_FUNCTION_SIGMOID));
-        genes.push_back(GeneticNodeGene("Output_Processing_Output","NetworkOutputNode",1,false,
+
+        #ifdef SN_ACTION
+        for (int i=0; i<numObjClasses; ++i) {
+         genes.push_back(GeneticNodeGene("Output_Processing_Output"+boost::lexical_cast<std::string>(i),"NetworkOutputNode",1,false,
                                         ACTIVATION_FUNCTION_SIGMOID));
+        }
+        cout << "Single Node Actions\n";
+        #elif defined(CON_ACTION)
+
+         genes.push_back(GeneticNodeGene("Output_InputBias_OutputDirection","NetworkOutputNode",1,false,
+                                        ACTIVATION_FUNCTION_SIGMOID));
+         genes.push_back(GeneticNodeGene("Output_Processing_OutputDirection","NetworkOutputNode",1,false,
+                                        ACTIVATION_FUNCTION_SIGMOID));
+         genes.push_back(GeneticNodeGene("Output_InputBias_OutputFire","NetworkOutputNode",1,false,
+                                        ACTIVATION_FUNCTION_SIGMOID));
+         genes.push_back(GeneticNodeGene("Output_Processing_OutputFire","NetworkOutputNode",1,false,
+                                        ACTIVATION_FUNCTION_SIGMOID));
+
+        #else
+         genes.push_back(GeneticNodeGene("Output_Processing_Output","NetworkOutputNode",1,false,
+                                        ACTIVATION_FUNCTION_SIGMOID));
+	#endif
 
         for (int a=0; a<populationSize; a++) {
             shared_ptr<GeneticIndividual> individual(new GeneticIndividual(genes,true,1.0));
@@ -169,6 +323,7 @@ namespace HCUBE
 
             // Choose which action to take
             Action action = selectAction(substrate, outputLayerIndx);
+	    //cout << "Action: " << action << endl;
             ale.act(action);
         }
         cout << "Game ended in " << ale.frame << " frames with score " << ale.game_score << endl;
@@ -182,6 +337,9 @@ namespace HCUBE
 
         // Set substrate value for self
         setSubstrateSelfValue(*visProc, substrate);
+       
+        // Set substrate value for bias 
+        substrate->setValue((Node(0,0,numObjClasses+1)),0.5f);
     }
 
     void AtariExperiment::setSubstrateObjectValues(VisualProcessor& visProc,
@@ -245,12 +403,56 @@ namespace HCUBE
             return;
         paintSubstrate(visProc, visProc.manual_self, substrate, numObjClasses);
     }
-
+   
     Action AtariExperiment::selectAction(NEAT::LayeredSubstrate<float>* substrate, int outputLayerIndx) {
         vector<int> max_inds;
         float max_val = -1e37;
+        
+
+        vector< pair<float,int> > activations;
+        #ifdef CON_ACTION
+	float fire_output= substrate->getValue(Node(0,0,outputLayerIndx+1));
+        bool firing= (fire_output>0.0f);
+
+	 for(int x=0;x<3;x++) {
+          for(int y=0;y<3;y++) {
+            activations.push_back( pair<float,int>(substrate->getValue(Node(x,y,outputLayerIndx)),x+y*3 ));
+	   }
+         }
+
+        /*
+        for(int i=8;i>0;i--) {
+         int j = NEAT::Globals::getSingleton()->getRandom().getRandomInt(i);
+         pair<float,int> tmp=activations[i];
+         activations[i]=activations[j];
+         activations[j]=tmp;
+        }
+        */
+
+         sort(activations.begin(),activations.end(),pair_sort_pred());
+         reverse(activations.begin(),activations.end());
+
+         for(int i=0;i<9;i++) {
+	   //try action as is
+ 	   if(is_allowable(map_to_action(activations[i].second,firing))) {
+             return map_to_action(activations[i].second,firing);
+	   }		
+	   //if that isn't legal and we were firing, see if not firing makes it legal
+	   else if (is_allowable(map_to_action(activations[i].second,!firing))) {
+             return map_to_action(activations[i].second,!firing);
+           }
+         }
+         
+
+	#else
+
         for (int i=0; i < numActions; i++) {
+            #ifdef SN_ACTION
+            float output = substrate->getValue(Node(0,0,outputLayerIndx+i));
+	    #else
             float output = substrate->getValue(Node(i,0,outputLayerIndx));
+            #endif
+
             if (output == max_val)
                 max_inds.push_back(i);
             else if (output > max_val) {
@@ -261,6 +463,7 @@ namespace HCUBE
         }
         int action_indx = NEAT::Globals::getSingleton()->getRandom().getRandomInt(max_inds.size());
         return ale.legal_actions[max_inds[action_indx]];
+        #endif
     }
 
     double AtariExperiment::gauss2D(double x, double y, double A, double mu_x, double mu_y,
